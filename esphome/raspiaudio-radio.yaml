@@ -1,7 +1,6 @@
 substitutions:
   name: raspiaudio-radio
   friendly_name: Raspiaudio Radio
-  raspiaudio_file: https://github.com/esphome/wake-word-voice-assistants/raw/main/casita/loading_320_240.png
 
 esphome:
   name: ${name}
@@ -18,13 +17,12 @@ esphome:
           id: screen_backlight
           brightness: 100%
       - lambda: |-
-              id(lightTO) = 0;
+          id(lightTO) = 0;
       - script.execute: logo
       - script.wait: logo
       - delay: 5sec
       - script.execute: reset_display
       - script.wait: reset_display
-
 
 external_components:
   - source: github://RASPIAUDIO/esphomeRadio@main
@@ -37,7 +35,6 @@ esp32:
   flash_size: 8MB
   framework:
     type: arduino
-
 
 ota:
   platform: esphome
@@ -133,18 +130,16 @@ interval:
       - if:
           condition:
             and:
-              - light.is_on: screen_backlight
               - lambda: 'return id(lightTO) < 60;'
           then:
-#            - logger.log: "La lumière screen_backlight est allumée."
             - lambda: |-
                 id(lightTO)++;
-#                ESP_LOGD("lightTO", "Compteur: %d", id(lightTO));
           else:
-#            - logger.log: "La lumière screen_backlight est éteinte."
             - lambda: |-
-                id(lightTO) = 0;
-            - light.turn_off: screen_backlight
+                id(lightTO) <= 6;
+            - light.turn_off:
+                id: screen_backlight
+                transition_length: 2s
 
 microphone:
   - platform: i2s_audio
@@ -158,37 +153,27 @@ image:
     id: raspiIm
     resize: 320x240
     type: RGB24
-  - file:  "https://github.com/RASPIAUDIO/esphomeRadio/raw/main/images/WFWW.png"
-    id: WFWWIm
-    resize: 320x240
-    type: RGB24
-  - file:  "https://github.com/RASPIAUDIO/esphomeRadio/raw/main/images/W.png"
-    id: WIm
-    resize: 320x240
-    type: RGB24
-  - file:  "https://github.com/RASPIAUDIO/esphomeRadio/raw/main/images/LISTEN.png"
-    id: LIm
-    resize: 320x240
-    type: RGB24
-  - file:  "https://github.com/RASPIAUDIO/esphomeRadio/raw/main/images/ANSWER.png"
-    id: AIm
-    resize: 320x240
-    type: RGB24
 
 font:
   - file:
       type: gfonts
-      family: Figtree
+      family: Roboto
       weight: 300
       italic: true
-    id: font_request
-    size: 15
+    id: font_status
+    size: 30
+    glyphsets:
+      - GF_Latin_Core
+      - GF_Cyrillic_Core
   - file:
       type: gfonts
-      family: Figtree
+      family: Roboto
       weight: 300
-    id: font_response
+    id: font_body
     size: 15
+    glyphsets:
+      - GF_Latin_Core
+      - GF_Cyrillic_Core
 
 display:
   - id: myDisplay
@@ -204,28 +189,110 @@ display:
     pages:
         - id: logoP
           lambda: |-
+            // Logo
             it.image(0, 0, id(raspiIm));
         - id: waitingP
           lambda: |-
-            it.image(0, 0, id(WFWWIm));
+            it.fill(Color::BLACK);
+            // Current Status
+            const char* text = "Wake Word...";
+            it.printf(40, 112, id(font_status), Color::WHITE, "%s", text);
+            // Time
+            auto time = id(homeassistant_time).now();
+            if (time.is_valid()) {
+              char str[6];
+              sprintf(str, "%02d:%02d", time.hour, time.minute);
+              it.printf(25, 5, id(font_body), Color::WHITE, "%s", str);
+            }
+            // Battery icon
+            it.rectangle(260, 5, 30, 15, Color(255, 255, 255)); // White frame
+            it.rectangle(291, 8, 3, 9, Color(255, 255, 255)); // White contact
+            // Battery level
+            int battery_level = (id(battery_percentage).state / 100.0) * 28;
+            it.filled_rectangle(262, 7, battery_level, 11, Color(0, 255, 0)); // Green fill
+            it.printf(260, 25, id(font_body), Color(255, 255, 255), "%.0f%%", id(battery_percentage).state); // Battery precentage
         - id: waitingBP
           lambda: |-
-            it.image(0, 0, id(WIm));
+            it.fill(Color::BLACK);
+            // Current Status
+            const char* text = "Action Button...";
+            it.printf(40, 112, id(font_status), Color::WHITE, "%s", text);
+            // Time
+            auto time = id(homeassistant_time).now();
+            if (time.is_valid()) {
+              char str[6];
+              sprintf(str, "%02d:%02d", time.hour, time.minute);
+              it.printf(25, 5, id(font_body), Color::WHITE, "%s", str);
+            }
+            // Battery icon
+            it.rectangle(260, 5, 30, 15, Color(255, 255, 255)); // White frame
+            it.rectangle(291, 8, 3, 9, Color(255, 255, 255)); // White contact
+            // Battery level
+            int battery_level = (id(battery_percentage).state / 100.0) * 28;
+            it.filled_rectangle(262, 7, battery_level, 11, Color(0, 255, 0)); // Green fill
+            it.printf(260, 25, id(font_body), Color(255, 255, 255), "%.0f%%", id(battery_percentage).state); // Battery precentage
         - id: listeningP
           lambda: |-
-              it.image(0, 0, id(LIm));
+            it.fill(Color::BLACK);
+            // Current Status
+            const char* text = "Listening...";
+            it.printf(40, 190, id(font_status), Color::WHITE, "%s", text);
+            // Microphone icon
+            it.rectangle(140, 60, 40, 80, Color::WHITE);
+            for (int i = 65; i < 135; i += 10) {
+              it.line(145, i, 175, i, Color::WHITE);
+            }
+            it.filled_circle(160, 140, 10, Color::WHITE);
+            it.line(160, 150, 160, 180, Color::WHITE);
+            it.line(150, 180, 170, 180, Color::WHITE);
+            // Time
+            auto time = id(homeassistant_time).now();
+            if (time.is_valid()) {
+              char str[6];
+              sprintf(str, "%02d:%02d", time.hour, time.minute);
+              it.printf(25, 5, id(font_body), Color::WHITE, "%s", str);
+            }
+            // Battery icon
+            it.rectangle(260, 5, 30, 15, Color(255, 255, 255)); // White frame
+            it.rectangle(291, 8, 3, 9, Color(255, 255, 255)); // White contact
+            // Battery level
+            int battery_level = (id(battery_percentage).state / 100.0) * 28;
+            it.filled_rectangle(262, 7, battery_level, 11, Color(0, 255, 0)); // Green fill
+            it.printf(260, 25, id(font_body), Color(255, 255, 255), "%.0f%%", id(battery_percentage).state); // Battery precentage
         - id: answeringP
           lambda: |-
-              it.image(0, 0, id(AIm));
-              it.rectangle(20 , 20 , 280 , 30 , Color::BLACK );
-              it.printf(30, 25, id(font_request), Color::BLACK, "%s", id(text_request).state.c_str());
-              it.rectangle(20 , 190 , 280 , 30 , Color::BLACK );
-              it.printf(30, 195, id(font_response), Color::BLACK, "%s", id(text_response).state.c_str());
+            it.fill(Color::BLACK);
+            // Current Status
+            const char* text = "Answering...";
+            it.printf(40, 112, id(font_status), Color::WHITE, "%s", text);
+            // Answer
+            it.printf(25, 45, id(font_body),  Color::WHITE, "%s", id(text_request).state.c_str());
+            it.printf(25, 195, id(font_body), Color::WHITE, "%s", id(text_response).state.c_str());
+            // Time
+            auto time = id(homeassistant_time).now();
+            if (time.is_valid()) {
+              char str[6];
+              sprintf(str, "%02d:%02d", time.hour, time.minute);
+              it.printf(25, 25, id(font_body), Color::WHITE, "%s", str);
+            }
+            // Battery icon
+            it.rectangle(260, 5, 30, 15, Color(255, 255, 255)); // White frame
+            it.rectangle(291, 8, 3, 9, Color(255, 255, 255)); // White contact
+            // Battery level
+            int battery_level = (id(battery_percentage).state / 100.0) * 28;
+            it.filled_rectangle(262, 7, battery_level, 11, Color(0, 255, 0)); // Green fill
+            it.printf(260, 25, id(font_body), Color(255, 255, 255), "%.0f%%", id(battery_percentage).state); // Battery precentage
 ###############
 # Home Assistant Components
 
-binary_sensor:
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+    on_time_sync:
+      then:
+        - logger.log: "Synchronized system clock"
 
+binary_sensor:
   - platform: gpio
     pin:
       number: GPIO48
@@ -281,6 +348,34 @@ binary_sensor:
     name: USB Plugged In
     disabled_by_default: true
 
+  - platform: template
+    name: "Button 4"
+    lambda: |-
+      return (id(adc_buttons).state > 0.7 && id(adc_buttons).state < 0.9);
+    on_press:
+      then:
+        - switch.turn_on: listen_force
+        - media_player.stop:
+    on_release:
+      then:
+        - switch.turn_off: listen_force
+        - media_player.play:
+
+  - platform: template
+    name: "Button 3"
+    lambda: |-
+      return (id(adc_buttons).state > 0.4 && id(adc_buttons).state < 0.6);
+
+  - platform: template
+    name: "Button 2"
+    lambda: |-
+      return (id(adc_buttons).state > 1.9 && id(adc_buttons).state < 2.2);
+
+  - platform: template
+    name: "Button 1"
+    lambda: |-
+      return (id(adc_buttons).state > 1.4 && id(adc_buttons).state < 1.7);
+
 sensor:
   - platform: rotary_encoder
     name: "Volume"
@@ -297,16 +392,20 @@ sensor:
         pullup: true
     on_anticlockwise:
       then:
-        - light.turn_on: screen_backlight
-        - lambda: |-
-                id(lightTO) = 0;
-        - media_player.volume_down: raspiaudio_speaker
+        - script.execute: reset_display
+        - homeassistant.service:
+            service: media_player.volume_set
+            data_template:
+              entity_id: media_player.raspiaudio_radio_raspiaudio_radio
+              volume_level: "{{ state_attr('media_player.raspiaudio_radio_raspiaudio_radio', 'volume_level') - 0.01 }}"
     on_clockwise:
       then:
-        - media_player.volume_up: raspiaudio_speaker
-        - light.turn_on: screen_backlight
-        - lambda: |-
-                id(lightTO) = 0;
+        - script.execute: reset_display 
+        - homeassistant.service:
+            service: media_player.volume_set
+            data_template:
+              entity_id: media_player.raspiaudio_radio_raspiaudio_radio
+              volume_level: "{{ state_attr('media_player.raspiaudio_radio_raspiaudio_radio', 'volume_level') + 0.01 }}"
 
   - platform: rotary_encoder
     name: "Function"
@@ -323,14 +422,10 @@ sensor:
         pullup: true
     on_anticlockwise:
       then:
-        - light.turn_on: screen_backlight
-        - lambda: |-
-                id(lightTO) = 0;
+        - script.execute: reset_display
     on_clockwise:
       then:
-        - light.turn_on: screen_backlight
-        - lambda: |-
-                id(lightTO) = 0;
+        - script.execute: reset_display
 
   - platform: template
     name: "Battery Voltage"
@@ -340,7 +435,7 @@ sensor:
     update_interval: 60s
     lambda: |-
       // Directly read the ADC value on GPIO13
-      return (float) analogRead(GPIO_NUM_13) / 4095.0 * 3.3;  // Adjust based on expected voltage range
+      return (float) analogRead(GPIO_NUM_13) / 4095.0 * 3.3; // Adjust based on expected voltage range
     filters:
       - multiply: 2.0
     on_value_range:
@@ -350,6 +445,7 @@ sensor:
             id: shutdown1
   - platform: template
     name: "Battery Percentage"
+    id: battery_percentage
     device_class: battery
     unit_of_measurement: "%"
     accuracy_decimals: 0
@@ -362,12 +458,20 @@ sensor:
         return (id(battery_voltage).state - 3.0) / (4.1 - 3.0) * 100.0;
       }
 
+  - platform: adc
+    pin: GPIO1
+    name: "Buttons"
+    id: adc_buttons
+    internal: true
+    update_interval: 50ms
+    attenuation: 11db
+
 text_sensor:
   - id: text_request
     platform: template
     on_value:
       lambda: |-
-        if(id(text_request).state.length()>40) {
+        if(id(text_request).state.length()>50) {
           std::string name = id(text_request).state.c_str();
           std::string truncated = esphome::str_truncate(name.c_str(),39);
           id(text_request).state = (truncated+"...").c_str();
@@ -377,12 +481,11 @@ text_sensor:
     platform: template
     on_value:
       lambda: |-
-        if(id(text_response).state.length()>32) {
+        if(id(text_response).state.length()>50) {
           std::string name = id(text_response).state.c_str();
           std::string truncated = esphome::str_truncate(name.c_str(),31);
           id(text_response).state = (truncated+"...").c_str();
         }
-
 
 switch:
   - platform: template
@@ -409,6 +512,18 @@ switch:
     internal: true
     id: shutdown1
 
+  - platform: template
+    id: listen_force
+    name: Listen_force
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - switch.turn_off: use_wake_word
+      - delay: 0.5s
+      - voice_assistant.start_continuous
+    on_turn_off:
+      - switch.turn_on: use_wake_word
+
 media_player:
   - platform: i2s_audio
     id: raspiaudio_speaker
@@ -434,7 +549,6 @@ voice_assistant:
     - light.turn_on:
         id: screen_backlight
         brightness: 100%
-        effect: none
     - script.execute: listening
     - script.wait: listening
 
@@ -451,7 +565,6 @@ voice_assistant:
     - light.turn_on:
         id: screen_backlight
         brightness: 100%
-        effect: none
     - script.execute: answering
     - script.wait: answering
     - delay: 5sec
@@ -475,7 +588,6 @@ voice_assistant:
     - light.turn_on:
         id: screen_backlight
         brightness: 100%
-        effect: none
     - delay: 1s
     - script.execute: reset_display
     - script.wait: reset_display
@@ -493,11 +605,9 @@ script:
     then:
     - light.turn_on: screen_backlight
     - lambda: |-
-                id(lightTO) = 0;
+        id(lightTO) = 0;
     - script.execute: waiting
     - script.wait: waiting
-
-
 
   - id: update_dac_mute
     then:
@@ -513,46 +623,44 @@ script:
             - logger.log: "Turning on DAC mute"
             - output.turn_on: dac_mute
 
-
   - id: logo
     then:
-       - lambda: |-
-           id(myDisplay).show_page(logoP);
-           id(myDisplay).update();
-           id(lightTO) = 0;
-       - light.turn_on: screen_backlight
-
-
+      - lambda: |-
+          id(myDisplay).show_page(logoP);
+          id(myDisplay).update();
+          id(lightTO) = 0;
+      - light.turn_on: screen_backlight
 
   - id: waiting
     then:
-       - if:
-           condition:
-               switch.is_on: use_wake_word
-           then:
-               - voice_assistant.start_continuous
-               - lambda: |-
-                   id(myDisplay).show_page(waitingP);
-                   id(myDisplay).update();
-                   id(lightTO) = 0;
-               - light.turn_on: screen_backlight
-           else:
-               - lambda: |-
-                   id(myDisplay).show_page(waitingBP);
-                   id(myDisplay).update();
-                   id(lightTO) = 0;
-               - light.turn_on: screen_backlight
+      - if:
+          condition:
+              switch.is_on: use_wake_word
+          then:
+              - voice_assistant.start_continuous
+              - lambda: |-
+                  id(myDisplay).show_page(waitingP);
+                  id(myDisplay).update();
+                  id(lightTO) = 0;
+              - light.turn_on: screen_backlight
+          else:
+              - lambda: |-
+                  id(myDisplay).show_page(waitingBP);
+                  id(myDisplay).update();
+                  id(lightTO) = 0;
+              - light.turn_on: screen_backlight
   - id: listening
     then:
-       - lambda: |-
-            id(myDisplay).show_page(listeningP);
-            id(myDisplay).update();
-            id(lightTO) = 0;
-       - light.turn_on: screen_backlight
+      - lambda: |-
+          id(myDisplay).show_page(listeningP);
+          id(myDisplay).update();
+          id(lightTO) = 0;
+
+      - light.turn_on: screen_backlight
   - id: answering
     then:
-       - lambda: |-
-            id(myDisplay).show_page(answeringP);
-            id(myDisplay).update();
-            id(lightTO) = 0;
-       - light.turn_on: screen_backlight
+      - lambda: |-
+          id(myDisplay).show_page(answeringP);
+          id(myDisplay).update();
+          id(lightTO) = 0;
+      - light.turn_on: screen_backlight
