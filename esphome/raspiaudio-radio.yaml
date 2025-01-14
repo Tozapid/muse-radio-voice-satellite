@@ -1,6 +1,7 @@
 substitutions:
   name: raspiaudio-radio
   friendly_name: Raspiaudio Radio
+  ha_entity: media_player.raspiaudio_radio_raspiaudio_radio
 
 esphome:
   name: ${name}
@@ -396,16 +397,16 @@ sensor:
         - homeassistant.service:
             service: media_player.volume_set
             data_template:
-              entity_id: media_player.raspiaudio_radio_raspiaudio_radio
-              volume_level: "{{ state_attr('media_player.raspiaudio_radio_raspiaudio_radio', 'volume_level') - 0.01 }}"
+              entity_id: ${ha_entity}
+              volume_level: "{{ state_attr('${ha_entity}', 'volume_level') - 0.01 }}"
     on_clockwise:
       then:
         - script.execute: reset_display 
         - homeassistant.service:
             service: media_player.volume_set
             data_template:
-              entity_id: media_player.raspiaudio_radio_raspiaudio_radio
-              volume_level: "{{ state_attr('media_player.raspiaudio_radio_raspiaudio_radio', 'volume_level') + 0.01 }}"
+              entity_id: ${ha_entity}
+              volume_level: "{{ state_attr('${ha_entity}', 'volume_level') + 0.01 }}"
 
   - platform: rotary_encoder
     name: "Function"
