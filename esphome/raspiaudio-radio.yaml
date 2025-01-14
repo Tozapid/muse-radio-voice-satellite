@@ -11,19 +11,11 @@ esphome:
     board_build.flash_mode: dio
     board_build.arduino.memory_type: qio_opi
   on_boot:
-    priority: -100.0
+    priority: 600.0
     then:
       - output.turn_off: dac_mute
-      - light.turn_on:
-          id: screen_backlight
-          brightness: 100%
-      - lambda: |-
-          id(lightTO) = 0;
       - script.execute: logo
       - script.wait: logo
-      - delay: 5sec
-      - script.execute: reset_display
-      - script.wait: reset_display
 
 external_components:
   - source: github://RASPIAUDIO/esphomeRadio@main
@@ -41,6 +33,14 @@ ota:
   platform: esphome
 
 api:
+  on_client_connected:
+    - if:
+        condition:
+          lambda: 'return (0 == client_info.find("Home Assistant "));'
+        then:
+          - delay: 1s
+          - script.execute: reset_display
+          - script.wait: reset_display
   services:
     - service: start_va
       then:
@@ -63,6 +63,13 @@ improv_serial:
 #captive_portal:
 
 logger:
+
+web_server:
+  version: 3
+  port: 80
+  auth:
+    username: !secret web_server_username
+    password: !secret web_server_password
 
 ##########
 # Hardware Configuration
@@ -124,6 +131,10 @@ globals:
   - id: lightTO
     type: int
     initial_value: '0'
+  - id: last_volume_value
+    type: int
+    restore_value: no
+    initial_value: '0'
 
 interval:
   - interval: 1sec
@@ -141,6 +152,19 @@ interval:
             - light.turn_off:
                 id: screen_backlight
                 transition_length: 2s
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            not:
+              lambda: 'return id(volume_encoder).state == id(last_volume_value);'
+          then:
+            - homeassistant.service:
+                service: media_player.volume_set
+                data:
+                  entity_id: ${ha_entity}
+                  volume_level: !lambda "return id(volume_encoder).state / 100.0;"
+            - lambda: 'id(last_volume_value) = id(volume_encoder).state;'
 
 microphone:
   - platform: i2s_audio
@@ -175,6 +199,10 @@ font:
     glyphsets:
       - GF_Latin_Core
       - GF_Cyrillic_Core
+  - file: "gfonts://Noto+Emoji&display=swap"
+    id: emoji
+    size: 15 
+    glyphs: ["\U0001F4E2"]
 
 display:
   - id: myDisplay
@@ -197,7 +225,7 @@ display:
             it.fill(Color::BLACK);
             // Current Status
             const char* text = "Wake Word...";
-            it.printf(40, 112, id(font_status), Color::WHITE, "%s", text);
+            it.printf(160, 120, id(font_status), Color::WHITE, TextAlign::CENTER, text);
             // Time
             auto time = id(homeassistant_time).now();
             if (time.is_valid()) {
@@ -205,19 +233,23 @@ display:
               sprintf(str, "%02d:%02d", time.hour, time.minute);
               it.printf(25, 5, id(font_body), Color::WHITE, "%s", str);
             }
+            // Volume indicator
+            it.print(85, 5, id(emoji), "\U0001F4E2");
+            it.printf(105, 5, id(font_body), Color::WHITE, "%.0f%%", id(volume_encoder).state);
             // Battery icon
-            it.rectangle(260, 5, 30, 15, Color(255, 255, 255)); // White frame
-            it.rectangle(291, 8, 3, 9, Color(255, 255, 255)); // White contact
+            it.rectangle(260, 5, 30, 15, Color::WHITE); // White frame
+            it.rectangle(291, 8, 3, 9, Color::WHITE); // White contact
             // Battery level
             int battery_level = (id(battery_percentage).state / 100.0) * 28;
             it.filled_rectangle(262, 7, battery_level, 11, Color(0, 255, 0)); // Green fill
-            it.printf(260, 25, id(font_body), Color(255, 255, 255), "%.0f%%", id(battery_percentage).state); // Battery precentage
+            it.printf(260, 25, id(font_body), Color::WHITE, "%.0f%%", id(battery_percentage).state); // Battery precentage
+
         - id: waitingBP
           lambda: |-
             it.fill(Color::BLACK);
             // Current Status
             const char* text = "Action Button...";
-            it.printf(40, 112, id(font_status), Color::WHITE, "%s", text);
+            it.printf(160, 120, id(font_status), Color::WHITE, TextAlign::CENTER, text);
             // Time
             auto time = id(homeassistant_time).now();
             if (time.is_valid()) {
@@ -225,19 +257,22 @@ display:
               sprintf(str, "%02d:%02d", time.hour, time.minute);
               it.printf(25, 5, id(font_body), Color::WHITE, "%s", str);
             }
+            // Volume indicator
+            it.print(85, 5, id(emoji), "\U0001F4E2");
+            it.printf(105, 5, id(font_body), Color::WHITE, "%.0f%%", id(volume_encoder).state);
             // Battery icon
-            it.rectangle(260, 5, 30, 15, Color(255, 255, 255)); // White frame
-            it.rectangle(291, 8, 3, 9, Color(255, 255, 255)); // White contact
+            it.rectangle(260, 5, 30, 15, Color::WHITE); // White frame
+            it.rectangle(291, 8, 3, 9, Color::WHITE); // White contact
             // Battery level
             int battery_level = (id(battery_percentage).state / 100.0) * 28;
             it.filled_rectangle(262, 7, battery_level, 11, Color(0, 255, 0)); // Green fill
-            it.printf(260, 25, id(font_body), Color(255, 255, 255), "%.0f%%", id(battery_percentage).state); // Battery precentage
+            it.printf(260, 25, id(font_body), Color::WHITE, "%.0f%%", id(battery_percentage).state); // Battery precentage
         - id: listeningP
           lambda: |-
             it.fill(Color::BLACK);
             // Current Status
             const char* text = "Listening...";
-            it.printf(40, 190, id(font_status), Color::WHITE, "%s", text);
+            it.printf(160, 200, id(font_status), Color::WHITE, TextAlign::CENTER, text);
             // Microphone icon
             it.rectangle(140, 60, 40, 80, Color::WHITE);
             for (int i = 65; i < 135; i += 10) {
@@ -253,19 +288,22 @@ display:
               sprintf(str, "%02d:%02d", time.hour, time.minute);
               it.printf(25, 5, id(font_body), Color::WHITE, "%s", str);
             }
+            // Volume indicator
+            it.print(85, 5, id(emoji), "\U0001F4E2");
+            it.printf(105, 5, id(font_body), Color::WHITE, "%.0f%%", id(volume_encoder).state);
             // Battery icon
-            it.rectangle(260, 5, 30, 15, Color(255, 255, 255)); // White frame
-            it.rectangle(291, 8, 3, 9, Color(255, 255, 255)); // White contact
+            it.rectangle(260, 5, 30, 15, Color::WHITE); // White frame
+            it.rectangle(291, 8, 3, 9, Color::WHITE); // White contact
             // Battery level
             int battery_level = (id(battery_percentage).state / 100.0) * 28;
             it.filled_rectangle(262, 7, battery_level, 11, Color(0, 255, 0)); // Green fill
-            it.printf(260, 25, id(font_body), Color(255, 255, 255), "%.0f%%", id(battery_percentage).state); // Battery precentage
+            it.printf(260, 25, id(font_body), Color::WHITE, "%.0f%%", id(battery_percentage).state); // Battery precentage
         - id: answeringP
           lambda: |-
             it.fill(Color::BLACK);
             // Current Status
             const char* text = "Answering...";
-            it.printf(40, 112, id(font_status), Color::WHITE, "%s", text);
+            it.printf(160, 120, id(font_status), Color::WHITE, TextAlign::CENTER, text);
             // Answer
             it.printf(25, 45, id(font_body),  Color::WHITE, "%s", id(text_request).state.c_str());
             it.printf(25, 195, id(font_body), Color::WHITE, "%s", id(text_response).state.c_str());
@@ -274,15 +312,18 @@ display:
             if (time.is_valid()) {
               char str[6];
               sprintf(str, "%02d:%02d", time.hour, time.minute);
-              it.printf(25, 25, id(font_body), Color::WHITE, "%s", str);
+              it.printf(25, 5, id(font_body), Color::WHITE, "%s", str);
             }
+            // Volume indicator
+            it.print(85, 5, id(emoji), "\U0001F4E2");
+            it.printf(105, 5, id(font_body), Color::WHITE, "%.0f%%", id(volume_encoder).state);
             // Battery icon
-            it.rectangle(260, 5, 30, 15, Color(255, 255, 255)); // White frame
-            it.rectangle(291, 8, 3, 9, Color(255, 255, 255)); // White contact
+            it.rectangle(260, 5, 30, 15, Color::WHITE); // White frame
+            it.rectangle(291, 8, 3, 9, Color::WHITE); // White contact
             // Battery level
             int battery_level = (id(battery_percentage).state / 100.0) * 28;
             it.filled_rectangle(262, 7, battery_level, 11, Color(0, 255, 0)); // Green fill
-            it.printf(260, 25, id(font_body), Color(255, 255, 255), "%.0f%%", id(battery_percentage).state); // Battery precentage
+            it.printf(260, 25, id(font_body), Color::WHITE, "%.0f%%", id(battery_percentage).state); // Battery precentage
 ###############
 # Home Assistant Components
 
@@ -391,22 +432,16 @@ sensor:
       mode:
         input: true
         pullup: true
+    min_value: 0
+    max_value: 100
+    restore_mode: "RESTORE_DEFAULT_ZERO"
+    publish_initial_value: true
     on_anticlockwise:
       then:
         - script.execute: reset_display
-        - homeassistant.service:
-            service: media_player.volume_set
-            data_template:
-              entity_id: ${ha_entity}
-              volume_level: "{{ state_attr('${ha_entity}', 'volume_level') - 0.01 }}"
     on_clockwise:
       then:
         - script.execute: reset_display 
-        - homeassistant.service:
-            service: media_player.volume_set
-            data_template:
-              entity_id: ${ha_entity}
-              volume_level: "{{ state_attr('${ha_entity}', 'volume_level') + 0.01 }}"
 
   - platform: rotary_encoder
     name: "Function"
@@ -467,6 +502,18 @@ sensor:
     update_interval: 50ms
     attenuation: 11db
 
+  - platform: homeassistant
+    name: "Volume Level"
+    id: volume_level
+    state_class: "measurement"
+    entity_id: ${ha_entity}
+    attribute: volume_level
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    internal: true
+    filters:
+      - lambda: return x * 100.0;
+
 text_sensor:
   - id: text_request
     platform: template
@@ -474,7 +521,7 @@ text_sensor:
       lambda: |-
         if(id(text_request).state.length()>50) {
           std::string name = id(text_request).state.c_str();
-          std::string truncated = esphome::str_truncate(name.c_str(),39);
+          std::string truncated = esphome::str_truncate(name.c_str(),49);
           id(text_request).state = (truncated+"...").c_str();
         }
 
@@ -484,7 +531,7 @@ text_sensor:
       lambda: |-
         if(id(text_response).state.length()>50) {
           std::string name = id(text_response).state.c_str();
-          std::string truncated = esphome::str_truncate(name.c_str(),31);
+          std::string truncated = esphome::str_truncate(name.c_str(),49);
           id(text_response).state = (truncated+"...").c_str();
         }
 
@@ -597,7 +644,6 @@ voice_assistant:
           id(use_wake_word).turn_off();
         }
 
-
 #########
 # Scripts
 
@@ -656,7 +702,6 @@ script:
           id(myDisplay).show_page(listeningP);
           id(myDisplay).update();
           id(lightTO) = 0;
-
       - light.turn_on: screen_backlight
   - id: answering
     then:
